@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI-консультант із харчування</title>
+    <style>
+        :root{
+            --bg:#f6f8fb; --card:#ffffff; --muted:#6b7280; --accent:#16a34a; --accent-2:#06b6d4;
+            --glass: rgba(255,255,255,0.88);
+            --nav-height:60px;
+            --radius:8px;
+            --shadow: 0 6px 20px rgba(2,6,23,0.06);
+            --small-font:13px;
+        }
+        *{box-sizing:border-box}
+        body{
+            margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+            color:#0f172a; padding:18px; padding-bottom:calc(var(--nav-height) + 18px);
+        }
+        .wrap{max-width:1050px;margin:0 auto}
+        header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+        .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800}
+        h1{margin:0;font-size:20px}
+        .muted{color:var(--muted);font-size:var(--small-font)}
+        .topcard{display:flex;gap:12px;background:var(--glass);padding:10px;border-radius:var(--radius);box-shadow:var(--shadow);align-items:flex-start}
+        .panel{background:var(--card);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow)}
+        form input, form select, form textarea{width:100%;padding:8px;border-radius:6px;border:1px solid #e6eef6;font-size:14px}
+        .controls{display:grid;grid-template-columns:1fr 320px;gap:12px}
+        .bottom-nav{position:fixed;left:0;right:0;bottom:0;height:var(--nav-height);display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(90deg,rgba(255,255,255,0.95),rgba(255,255,255,0.9));box-shadow:0 -6px 24px rgba(2,6,23,0.06)}
+        .nav-btn{padding:8px 14px;border-radius:10px;border:none;background:transparent;cursor:pointer;font-weight:700;font-size:14px}
+        .nav-btn.active{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff}
+        .hidden{display:none}
+        .meal-panel{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:10px;border-radius:8px; margin-bottom: 8px;}
+        .meal-img {width:100px; height:100px; object-fit:cover; border-radius:6px; flex-shrink:0; background:#eee;}
+        
+        /* Стилі для модального вікна (окремої менюшки) */
+        .full-recipe-modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:92%;max-width:760px;max-height:82vh;overflow:auto;background:var(--card);border-radius:10px;padding:20px;box-shadow:0 30px 80px rgba(2,6,23,0.35);z-index:1000; border: 1px solid rgba(0,0,0,0.05);}
+        .modal-overlay {position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:999;backdrop-filter: blur(2px);}
+        .modal-close{position:absolute;right:16px;top:16px;cursor:pointer;font-size:24px;z-index:10; color: var(--muted); background: var(--card); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1);}
+        .modal-img-banner {width:100%; height:240px; object-fit:cover; border-radius:8px; margin-bottom:16px; background:#eee;}
+        
+        body.dark{background:linear-gradient(180deg,#07121a 0%, #04101a 100%);color:#e6eef6}
+        body.dark .topcard{background:rgba(10,15,20,0.6)}
+        body.dark .panel{background:#071827}
+        body.dark .muted{color:#bcd0e3}
+        body.dark .bottom-nav{background:linear-gradient(90deg,#02202a,#041827);box-shadow:0 -6px 24px rgba(0,0,0,0.5)}
+        body.dark .nav-btn{color:#cfeaf3}
+        body.dark .nav-btn.active{background:linear-gradient(90deg,#0b8f56,#0598b0);color:#fff}
+        body.dark .full-recipe-modal{background:#0b1b25;color:#e6eef6; border: 1px solid #1e293b;}
+        body.dark .modal-close{color:#e6eef6; background: #1e293b;}
+        body.dark form input, body.dark form select{background:#0b1b22;color:#e6eef6;border:1px solid rgba(255,255,255,0.06)}
+        body.dark [style*="color:#6b7280"]{color:#bcd0e3 !important}
+        a { color: var(--accent-2); text-decoration: none; cursor: pointer;}
+        button.action { background: linear-gradient(90deg,var(--accent),var(--accent-2)); color: #fff; border: none; padding: 8px 10px; border-radius:8px; cursor:pointer; font-weight:700 }
+        .compact-key { font-weight:700; font-size:13px; color:#0b1220 }
+        body.dark .compact-key { color: #e6eef6 }
+        @media (max-width: 768px) { .controls { grid-template-columns: 1fr; } .topcard { flex-direction: column; } .meal-panel { flex-direction: column; } .meal-img { width: 100%; height: 160px; } }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header>
+            <div class="logo">AI</div>
+            <div style="flex:1">
+                <h1>AI-консультант із харчування</h1>
+                <div class="muted small">Меню під твій настрій та мету — з фото</div>
+            </div>
+            <div>
+                <button onclick="toggleDark()" style="background:transparent;border:none;cursor:pointer;font-size:18px">🌗</button>
+            </div>
+        </header>
+
+        <div id="page-home">
+            <div class="topcard">
+                <form id="planForm" style="width:100%">
+                    <div class="controls">
+                        <div class="panel">
+                            <div style="display:flex;gap:8px">
+                                <div style="flex:1">
+                                    <label class="small">Вік</label>
+                                    <input name="age" type="number" min="10" max="120" value="30">
+                                </div>
+                                <div style="width:120px">
+                                    <label class="small">Стать</label>
+                                    <select name="sex">
+                                        <option value="male" selected>Чоловік</option>
+                                        <option value="female">Жінка</option>
+                                        <option value="other">Інше</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                                <div>
+                                    <label class="small">Вага (кг)</label>
+                                    <input name="weight_kg" type="number" step="0.1" value="75">
+                                </div>
+                                <div>
+                                    <label class="small">Зріст (см)</label>
+                                    <input name="height_cm" type="number" step="1" value="175">
+                                </div>
+                            </div>
+
+                            <div style="margin-top:8px">
+                                <label class="small">Рівень активності</label>
+                                <select name="activity">
+                                    <option value="sedentary">Низька</option>
+                                    <option value="office">Офісна</option>
+                                    <option value="student">Учень</option>
+                                    <option value="light">Легка</option>
+                                    <option value="moderate" selected>Помірна</option>
+                                    <option value="daily-sport">Щоденний спорт</option>
+                                    <option value="active">Висока</option>
+                                    <option value="extreme">Екстрим</option>
+                                    <option value="walk-many">Багато ходжу</option>
+                                    <option value="sport-twice">Спорт 2×/день</option>
+                                    <option value="sitting-stress">Сидяча + стрес</option>
+                                    <option value="poor-sleep">Поганий сон</option>
+                                </select>
+                            </div>
+
+                            <div style="display:flex;gap:8px;margin-top:8px">
+                                <div style="flex:1">
+                                    <label class="small">Настрій</label>
+                                    <select name="mood">
+                                        <option value="happy" selected>Щасливий</option>
+                                        <option value="stressed">Стрес</option>
+                                        <option value="sad">Сумний</option>
+                                        <option value="energetic">Енергійний</option>
+                                        <option value="hungry">Голодний</option>
+                                        <option value="sleepy">Сонний</option>
+                                        <option value="want-sweet">Хочу солодкого</option>
+                                        <option value="dont-want-cook">Не хочу готувати</option>
+                                        <option value="post-workout">Після тренування</option>
+                                        <option value="creative">Творчий</option>
+                                    </select>
+                                </div>
+                                <div style="width:220px">
+                                    <label class="small">Мета</label>
+                                    <select name="goal">
+                                        <option value="lose-weight">Схуднення</option>
+                                        <option value="maintain-weight" selected>Тримати вагу</option>
+                                        <option value="gain-weight">Набір ваги</option>
+                                        <option value="build-muscle">Побудова м'язів</option>
+                                        <option value="healthier">Здоровіше</option>
+                                        <option value="more-energy">Більше енергії</option>
+                                        <option value="less-sugar">Менше цукру</option>
+                                        <option value="cutting">Сушка</option>
+                                        <option value="fast-muscle-gain">Швидкий набір м'язів</option>
+                                        <option value="better-sleep">Краще засинання</option>
+                                        <option value="detox">Детокс</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel" style="display:flex;flex-direction:column;justify-content:space-between;gap:8px">
+                            <div>
+                                <div class="small" style="margin-bottom:8px"><strong>Генерація меню</strong></div>
+                                <div class="small">Система підбере найкращі рецепти, враховуючи калорійність, настрій та мету.</div>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:8px">
+                                <button type="button" onclick="generatePlan()" class="action">Згенерувати план</button>
+                                <button type="button" onclick="saveCurrentPlan()" style="background:transparent;border:1px solid #e6eef6;padding:8px;border-radius:8px;cursor:pointer">Зберегти план</button>
+                            </div>
+                        </div>
+                    </div>
+                
+                    <div style="margin-top:10px">
+                        <label class="small">Параметри — виключити інгредієнти (наприклад: яйця, риба, молоко)</label>
+                        <input id="forbiddenInput" name="notes" placeholder="Напиши через кому що виключити...">
+                    </div>
+                </form>
+            </div>
+
+            <div id="planResult" class="hidden" style="margin-top:12px; display:flex; gap:12px; flex-wrap:wrap;">
+                <div style="flex:1; min-width: 300px;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-end; margin-bottom: 10px;">
+                        <div>
+                            <div class="small">Дата: <span id="planDate"></span></div>
+                            <div style="font-weight:800" id="planTargetDisplay"></div>
+                        </div>
+                        <div class="small" id="planProfileDisplay"></div>
+                    </div>
+
+                    <div id="mealsContainer" style="display:grid;grid-template-columns:1fr;gap:8px">
+                        </div>
+                </div>
+
+                <aside style="width:320px;display:flex;flex-direction:column;gap:8px; flex-grow: 1;">
+                    <div class="panel">
+                        <h4 style="margin:0 0 8px 0">Пояснення</h4>
+                        <pre id="planExplanation" style="white-space:pre-wrap;font-family:inherit;margin:0" class="small"></pre>
+                    </div>
+
+                    <div class="panel">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <h4 style="margin:0">Список покупок</h4>
+                            <div>
+                                <button onclick="copyShopping()" style="background:transparent;border:none;cursor:pointer" class="small">Копіювати</button>
+                            </div>
+                        </div>
+                        <ul id="shoppingList" style="margin-top:8px;font-size:13px; padding-left: 20px;">
+                        </ul>
+                    </div>
+                </aside>
+            </div>
+        </div>
+
+        <div id="page-myrecipes" class="hidden">
+            <div class="panel">
+                <h3>Мої збережені рецепти та плани</h3>
+                <div id="myRecipesList" class="small muted">Тут будуть збережені рецепти та плани.</div>
+            </div>
+        </div>
+
+        <div id="modalOverlay" class="modal-overlay hidden" onclick="closeFullRecipe()"></div>
+        <div id="fullRecipeModal" class="full-recipe-modal hidden" aria-hidden="true">
+            <div style="position:relative">
+                <div class="modal-close" onclick="closeFullRecipe()">✕</div>
+                <img id="fullRecipeImage" class="modal-img-banner hidden">
+                <h2 id="fullRecipeTitle" style="margin-top:0">Рецепт</h2>
+                <div id="fullRecipeBody" class="small" style="line-height: 1.6;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="bottom-nav" role="navigation">
+        <button class="nav-btn active" id="nav-home" onclick="showPage('home')">Головна</button>
+        <button class="nav-btn" id="nav-myrecipes" onclick="showPage('myrecipes')">Мої рецепти</button>
+    </div>
+
+<script>
+// --- DATA & CONFIG ---
+const ACTIVITY_MULTIPLIERS = { 'sedentary': 1.2, 'office': 1.25, 'student': 1.3, 'light': 1.375, 'moderate': 1.55, 'daily-sport': 1.65, 'active': 1.725, 'extreme': 1.9, 'walk-many': 1.35, 'sport-twice': 1.8, 'sitting-stress': 1.25, 'poor-sleep': 1.15 };
+const GOAL_MODIFIERS = { 'lose-weight': 0.85, 'maintain-weight': 1.0, 'gain-weight': 1.15, 'build-muscle': 1.2, 'healthier': 0.98, 'more-energy': 1.02, 'less-sugar': 0.95, 'cutting': 0.8, 'fast-muscle-gain': 1.25, 'better-sleep': 0.97, 'less-fat': 0.94, 'detox': 0.9 };
+const MOOD_STYLES = { 'stressed': ['comfort', 'light'], 'happy': ['balanced', 'treat', 'comfort'], 'sad': ['comfort', 'light'], 'energetic': ['energizing', 'high-protein', 'carb-focused'], 'hungry': ['hearty', 'comfort'], 'sleepy': ['light', 'easy'], 'angry': ['comfort'], 'creative': ['inspired', 'treat'], 'depressed': ['comfort', 'light'], 'want-sweet': ['dessert', 'sweet'], 'dont-want-cook': ['snack', 'ready'], 'post-workout': ['high-protein', 'recovery'], 'relax': ['comfort', 'treat'] };
+
+// Клас рецепту
+class Recipe {
+    constructor(id, name_uk, tags, ingredients, nutrition, steps_uk, image, rating=0, votes=0) {
+        this.id = id; this.name_uk = name_uk; this.tags = tags; this.ingredients = ingredients;
+        this.nutrition = nutrition; this.steps_uk = steps_uk; this.image = image;
+        this.rating = rating; this.votes = votes;
+    }
+}
+
+// База даних рецептів
+const base_img_url = "https://image.pollinations.ai/prompt/delicious%20food%20photorealistic%20";
+let RECIPES = [
+    new Recipe('r001', 'Йогурт з ягодами і гранолою', ['breakfast', 'light', 'sweet'], {'йогурт грецький (200г)': 200, 'ягоди (100г)': 100, 'гранола (30г)': 30, 'мед (10г)': 10}, {calories: 330, protein: 20, carbs: 35, fats: 10}, ['Покласти йогурт у миску.', 'Промити та підсушити ягоди, додати зверху.', 'Посипати гранолою, полити медом.', 'Злегка перемішати і подати.'], base_img_url + 'greek%20yogurt%20bowl%20with%20fresh%20berries%20and%20granola?width=400&height=300&nologo=true&seed=1'),
+    new Recipe('r002', 'Омлет з овочами', ['breakfast', 'high-protein'], {'яйця (2 шт)': 2, 'кабачок (80г)': 80, 'помідор (50г)': 50, 'олія (5мл)': 5}, {calories: 300, protein: 18, carbs: 6, fats: 20}, ['Натерти кабачок, віджати вологу.', 'Збити яйця, додати кабачок та дрібно порізаний помідор.', 'Посмажити на невеликій кількості олії до готовності.'], base_img_url + 'omelet%20with%20zucchini%20and%20tomatoes?width=400&height=300&nologo=true&seed=2'),
+    new Recipe('r003', 'Авокадо-тост з яйцем', ['breakfast', 'light'], {'авокадо (1/2)': 0.5, 'хліб цільнозерновий (1 слайс)': 1, 'яйце (1 шт)': 1}, {calories: 310, protein: 13, carbs: 26, fats: 18}, ['Підсмажити хліб.', 'Розім\'яти авокадо з лимонним соком і сіллю.', 'Покласти авокадо на тост, додати яйце пашот зверху.'], base_img_url + 'avocado%20toast%20with%20poached%20egg?width=400&height=300&nologo=true&seed=3'),
+    new Recipe('r010', 'Смузі боул з манго', ['breakfast', 'sweet', 'drink'], {'манго (150г)': 150, 'банан (50г)': 50, 'йогурт (120г)': 120, 'горіхи (10г)': 10}, {calories: 350, protein: 8, carbs: 60, fats: 8}, ['Збити манго, банан і йогурт до кремової текстури.', 'Викласти у миску, прикрасити горіхами та насінням.'], base_img_url + 'mango%20smoothie%20bowl%20yellow?width=400&height=300&nologo=true&seed=10'),
+    new Recipe('r011', 'Какао з мигдальним молоком', ['drink', 'sweet'], {'мигдальне молоко (200мл)': 200, 'какао-порошок (10г)': 10, 'мед (10г)': 10}, {calories: 200, protein: 4, carbs: 28, fats: 8}, ['Нагріти молоко, додати какао і мед, ретельно збити.', 'Подавати гарячим.'], base_img_url + 'hot%20cocoa%20drink%20in%20mug?width=400&height=300&nologo=true&seed=11'),
+    new Recipe('r012', 'Протеїновий шейк', ['drink', 'high-protein'], {'протеїн (30г)': 30, 'молоко/вода (250мл)': 250, 'банан (50г)': 50}, {calories: 320, protein: 28, carbs: 30, fats: 6}, ['Змішати інгредієнти у шейкері або блендері.', 'Пити відразу після приготування.'], base_img_url + 'protein%20shake%20in%20glass%20with%20banana?width=400&height=300&nologo=true&seed=12'),
+    new Recipe('r020', 'Куряче філе з овочами', ['lunch', 'balanced'], {'куряче філе (150г)': 150, 'броколі (120г)': 120, 'морква (80г)': 80, 'олія (10мл)': 10}, {calories: 420, protein: 38, carbs: 20, fats: 18}, ['Порізати філе на шматки, посолити.', 'Обсмажити на олії до золотистої скоринки.', 'Додати овочі, накрити і тушкувати 8-10 хв.'], base_img_url + 'fried%20chicken%20breast%20fillet%20with%20broccoli%20and%20carrots?width=400&height=300&nologo=true&seed=20'),
+    new Recipe('r021', 'Сьомга з лимоном і кіноа', ['dinner', 'high-protein'], {'сьомга (150г)': 150, 'кіноа (80г)': 80, 'лимон (30г)': 30}, {calories: 560, protein: 36, carbs: 48, fats: 24}, ['Замаринувати сьомгу у лимонному соці, сіль, перець.', 'Запекти 12-15 хв при 180°C.', 'Паралельно зварити кіноа, подати разом.'], base_img_url + 'baked%20salmon%20steak%20with%20quinoa%20and%20lemon?width=400&height=300&nologo=true&seed=21'),
+    new Recipe('r030', 'Хумус з овочами', ['snack', 'vegetarian'], {'нут відварний (150г)': 150, 'тахіні (15г)': 15, 'олія (10мл)': 10, 'овочі (100г)': 100}, {calories: 240, protein: 8, carbs: 30, fats: 10}, ['Змішати нут з тахіні, олією і лимоном в блендері до однорідності.', 'Подавати з нарізаними овочами.'], base_img_url + 'hummus%20bowl%20with%20carrot%20sticks?width=400&height=300&nologo=true&seed=30'),
+    new Recipe('r040', 'Паста карбонара (полегшена)', ['lunch', 'comfort'], {'спагеті (80г)': 80, 'бекон (30г)': 30, 'яйце (1 шт)': 1, 'пармезан (20г)': 20}, {calories: 520, protein: 22, carbs: 61, fats: 20}, ['Зварити пасту до al dente.', 'Обсмажити бекон до хрусткого стану.', 'Змішати пасту з яйцем та сиром швидко, поки яйце не згорнулося.'], base_img_url + 'pasta%20carbonara%20spaghetti?width=400&height=300&nologo=true&seed=40'),
+    new Recipe('r041', 'Панкейки на кефірі', ['breakfast', 'sweet'], {'борошно (100г)': 100, 'кефір (150мл)': 150, 'яйце (1 шт)': 1}, {calories: 420, protein: 10, carbs: 60, fats: 12}, ['Змішати інгредієнти до гладкого тіста.', 'Смажити на сковороді до золотистого кольору.'], base_img_url + 'fluffy%20pancakes%20stack?width=400&height=300&nologo=true&seed=41'),
+    new Recipe('r042', 'Суп-пюре з гарбуза', ['lunch', 'vegetarian', 'light'], {'гарбуз (400г)': 400, 'цибуля (50г)': 50, 'вода (500мл)': 500}, {calories: 180, protein: 3, carbs: 30, fats: 6}, ['Обсмажити цибулю, додати гарбуз і воду, варити до м\'якості.', 'Пропюрирувати блендером і додати спеції.'], base_img_url + 'pumpkin%20cream%20soup%20orange?width=400&height=300&nologo=true&seed=42'),
+    new Recipe('r043', 'Кесаділья з куркою', ['lunch', 'comfort'], {'тортилья (1 шт)': 1, 'курка (80г)': 80, 'сир (60г)': 60}, {calories: 560, protein: 32, carbs: 40, fats: 28}, ['Обсмажити курку з приправами, покласти на тортилью з сиром.', 'Скласти і обсмажити до рум\'янцю.'], base_img_url + 'chicken%20quesadilla%20mexican?width=400&height=300&nologo=true&seed=43'),
+    new Recipe('r044', 'Запечені яблука з медом', ['dessert', 'sweet'], {'яблука (2 шт)': 2, 'мед (20г)': 20, 'горіхи (20г)': 20}, {calories: 280, protein: 4, carbs: 48, fats: 8}, ['Вирізати серцевину яблук, заповнити медом і горіхами.', 'Запікати 20-25 хв при 180°C.'], base_img_url + 'baked%20apples%20with%20honey%20and%20nuts?width=400&height=300&nologo=true&seed=44'),
+    new Recipe('r045', 'Теплий шоколадний напій', ['drink', 'sweet'], {'молоко (200мл)': 200, 'какао (15г)': 15, 'цукор (10г)': 10}, {calories: 260, protein: 8, carbs: 28, fats: 12}, ['Підігріти молоко, додати какао, добре розмішати.', 'Подати гарячим з невеликою кількістю збитих вершків за бажанням.'], base_img_url + 'hot%20chocolate%20drink?width=400&height=300&nologo=true&seed=45'),
+    new Recipe('r046', 'Запечена курка з картоплею', ['dinner', 'hearty'], {'курка (200г)': 200, 'картопля (200г)': 200, 'олія (10мл)': 10}, {calories: 740, protein: 48, carbs: 60, fats: 28}, ['Приправити курку, розкласти з картоплею на деко, запікати 40-50 хв при 180°C.'], base_img_url + 'roasted%20chicken%20legs%20with%20potatoes?width=400&height=300&nologo=true&seed=46'),
+    new Recipe('r047', 'Боул з кіноа і овочами', ['lunch', 'bowl', 'vegetarian'], {'кіноа (80г)': 80, 'авокадо (1/2)': 0.5, 'овочі (120г)': 120}, {calories: 420, protein: 12, carbs: 48, fats: 18}, ['Зварити кіноа, змішати з овочами та авокадо, заправити соусом.'], base_img_url + 'quinoa%20bowl%20avocado%20vegetables?width=400&height=300&nologo=true&seed=47'),
+    new Recipe('r048', 'Енергетичний батончик домашній', ['snack', 'sweet'], {'горіхи (50г)': 50, 'фініки (100г)': 100, 'вівсянка (40г)': 40}, {calories: 320, protein: 8, carbs: 40, fats: 14}, ['Подрібнити інгредієнти в блендері, сформувати батончики, охолодити.'], base_img_url + 'granola%20energy%20bar%20nuts%20dates?width=400&height=300&nologo=true&seed=48'),
+    new Recipe('r049', 'Том-ям (легкий)', ['dinner', 'light'], {'креветки (120г)': 120, 'бульйон (400мл)': 400, 'лимон (20г)': 20}, {calories: 220, protein: 18, carbs: 10, fats: 8}, ['Закип\'ятити бульйон, додати креветки та спеції, довести до готовності.'], base_img_url + 'tom%20yam%20soup%20shrimp?width=400&height=300&nologo=true&seed=49'),
+    new Recipe('r050', 'Крем-брюле (полегшений)', ['dessert', 'sweet'], {'жовтки (2 шт)': 2, 'молоко (200мл)': 200, 'цукор (15г)': 15}, {calories: 380, protein: 8, carbs: 38, fats: 22}, ['Змішати жовтки з молоком і цукром, випікати на водяній бані 30 хв при 150°C.'], base_img_url + 'creme%20brulee%20dessert?width=400&height=300&nologo=true&seed=50'),
+    new Recipe('r051', 'Вівсянка на воді з яблуком і корицею', ['breakfast', 'light', 'vegetarian'], {'вівсяні пластівці (50г)': 50, 'вода (200мл)': 200, 'яблуко (100г)': 100, 'кориця': 1}, {calories: 280, protein: 8, carbs: 45, fats: 6}, ['Зварити вівсянку на воді до готовності.', 'Додати нарізане кубиками яблуко і посипати корицею.'], base_img_url + 'oatmeal%20porridge%20with%20apple%20and%20cinnamon?width=400&height=300&nologo=true&seed=51'),
+    new Recipe('r052', 'Сирники запечені з родзинками', ['breakfast', 'sweet', 'high-protein'], {'сир кисломолочний (200г)': 200, 'яйце (1 шт)': 1, 'борошно (10г)': 10, 'родзинки (10г)': 10}, {calories: 340, protein: 25, carbs: 30, fats: 12}, ['Змішати сир, яйце, борошно та родзинки.', 'Сформувати сирники, запекти в духовці при 180°C близько 20 хв.'], base_img_url + 'ukrainian%20syrniki%20cottage%20cheese%20pancakes%20raisins?width=400&height=300&nologo=true&seed=52'),
+    new Recipe('r053', 'Яєчня з грибами та шпинатом', ['breakfast', 'high-protein'], {'яйця (3 шт)': 3, 'печериці (100г)': 100, 'шпинат (50г)': 50, 'олія (5мл)': 5}, {calories: 310, protein: 20, carbs: 5, fats: 23}, ['Обсмажити на сковороді гриби та шпинат.', 'Додати збиті яйця, готувати до готовності.'], base_img_url + 'scrambled%20eggs%20with%20spinach%20and%20mushrooms?width=400&height=300&nologo=true&seed=53'),
+    new Recipe('r054', 'Тост з арахісовою пастою та бананом', ['breakfast', 'hearty', 'sweet'], {'хліб цільнозерновий (2 слайси)': 2, 'арахісова паста (30г)': 30, 'банан (50г)': 50}, {calories: 380, protein: 14, carbs: 35, fats: 20}, ['Підсмажити хліб.', 'Намазати арахісову пасту, покласти кружальця банана.'], base_img_url + 'toast%20with%20peanut%20butter%20and%20banana%20slices?width=400&height=300&nologo=true&seed=54'),
+    new Recipe('r055', 'Чиа пудинг на кокосовому молоці', ['breakfast', 'light', 'drink'], {'насіння чіа (30г)': 30, 'кокосове молоко (200мл)': 200, 'мед (10г)': 10, 'ягоди (30г)': 30}, {calories: 320, protein: 10, carbs: 38, fats: 15}, ['Змішати чіа, молоко та мед. Залишити на ніч у холодильнику.', 'Вранці додати свіжі ягоди.'], base_img_url + 'chia%20pudding%20glass%20berries?width=400&height=300&nologo=true&seed=55'),
+    new Recipe('r056', 'Боул з гречки та свіжих овочів', ['breakfast', 'vegetarian', 'balanced'], {'гречка відварна (150г)': 150, 'огірок (50г)': 50, 'помідор (50г)': 50, 'зелень': 5}, {calories: 360, protein: 10, carbs: 60, fats: 8}, ['Змішати теплу гречку з нарізаними овочами.', 'Заправити невеликою кількістю олії та зеленню.'], base_img_url + 'buckwheat%20porridge%20bowl%20with%20cucumber%20and%20tomato?width=400&height=300&nologo=true&seed=56'),
+    new Recipe('r057', 'Фріттата з куркою і сиром', ['breakfast', 'high-protein', 'hearty'], {'яйця (3 шт)': 3, 'куряче філе відварне (50г)': 50, 'сир твердий (30г)': 30, 'молоко (30мл)': 30}, {calories: 410, protein: 35, carbs: 8, fats: 25}, ['Змішати збиті яйця, молоко, нарізану курку та натертий сир.', 'Запекти в невеликій формі до готовності.'], base_img_url + 'baked%20frittata%20egg%20casserole?width=400&height=300&nologo=true&seed=57'),
+    new Recipe('r058', 'Шоколадна вівсянка (за ніч)', ['breakfast', 'sweet'], {'вівсяні пластівці (50г)': 50, 'молоко (150мл)': 150, 'какао (5г)': 5, 'банан (50г)': 50}, {calories: 350, protein: 12, carbs: 50, fats: 12}, ['Змішати пластівці, молоко та какао. Поставити на ніч у холодильник.', 'Вранці додати нарізаний банан.'], base_img_url + 'chocolate%20overnight%20oats%20jar?width=400&height=300&nologo=true&seed=58'),
+    new Recipe('r059', 'Вафлі зі шпинатом та лососем', ['breakfast', 'light', 'high-protein'], {'борошно (50г)': 50, 'молоко (100мл)': 100, 'шпинат (50г)': 50, 'лосось слабосолений (30г)': 30}, {calories: 390, protein: 28, carbs: 35, fats: 16}, ['Приготувати тісто, додавши шпинат. Випекти вафлі.', 'Подавати зі шматочками лосося.'], base_img_url + 'green%20spinach%20waffles%20with%20salmon?width=400&height=300&nologo=true&seed=59'),
+    new Recipe('r060', 'Сендвіч з індичкою та авокадо', ['breakfast', 'balanced'], {'хліб (2 слайси)': 2, 'філе індички (50г)': 50, 'авокадо (30г)': 30, 'салат': 1}, {calories: 370, protein: 25, carbs: 30, fats: 17}, ['Підсмажити хліб. Зібрати сендвіч з авокадо, індичкою та салатом.'], base_img_url + 'turkey%20avocado%20sandwich?width=400&height=300&nologo=true&seed=60'),
+    new Recipe('r061', 'Протеїновий пудинг з кави', ['breakfast', 'drink', 'high-protein'], {'протеїн кавовий (30г)': 30, 'вода/молоко (200мл)': 200, 'лід': 1}, {calories: 220, protein: 25, carbs: 15, fats: 6}, ['Змішати всі інгредієнти у шейкері або блендері.', 'Подавати холодним з льодом.'], base_img_url + 'iced%20coffee%20protein%20shake?width=400&height=300&nologo=true&seed=61'),
+    new Recipe('r062', 'Рисова каша на молоці з корицею', ['breakfast', 'sweet', 'comfort'], {'рис (60г)': 60, 'молоко (250мл)': 250, 'цукор (10г)': 10, 'кориця': 1}, {calories: 360, protein: 10, carbs: 65, fats: 7}, ['Зварити рис на молоці до готовності.', 'Додати цукор і корицю за смаком, перемішати.'], base_img_url + 'rice%20pudding%20with%20cinnamon?width=400&height=300&nologo=true&seed=62'),
+    new Recipe('r063', 'Омлет у лаваші з сиром', ['breakfast', 'hearty'], {'лаваш тонкий (50г)': 50, 'яйця (2 шт)': 2, 'сир твердий (30г)': 30}, {calories: 380, protein: 22, carbs: 30, fats: 20}, ['Приготувати омлет.', 'Загорнути омлет та натертий сир у лаваш і прогріти на сковороді.'], base_img_url + 'omelet%20cheese%20wrap%20lavash?width=400&height=300&nologo=true&seed=63'),
+    new Recipe('r064', 'Фруктовий салат з йогуртом', ['breakfast', 'light', 'sweet'], {'йогурт натуральний (150г)': 150, 'банан (50г)': 50, 'ківі (50г)': 50, 'апельсин (50г)': 50}, {calories: 290, protein: 10, carbs: 45, fats: 8}, ['Нарізати фрукти.', 'Змішати з йогуртом.'], base_img_url + 'fruit%20salad%20bowl%20yogurt?width=400&height=300&nologo=true&seed=64'),
+    new Recipe('r065', 'Гречана каша з кефіром (за ніч)', ['breakfast', 'light', 'balanced'], {'гречка (50г)': 50, 'кефір (200мл)': 200, 'насіння льону (5г)': 5}, {calories: 270, protein: 12, carbs: 40, fats: 7}, ['Залити гречку кефіром на ніч.', 'Додати насіння льону перед вживанням.'], base_img_url + 'buckwheat%20with%20kefir%20healthy?width=400&height=300&nologo=true&seed=65'),
+    new Recipe('r066', 'Сочевиця з овочами та тофу', ['lunch', 'vegetarian', 'balanced'], {'сочевиця відварна (150г)': 150, 'тофу (80г)': 80, 'морква (50г)': 50, 'цибуля (50г)': 50}, {calories: 450, protein: 25, carbs: 55, fats: 15}, ['Обсмажити овочі, додати сочевицю та нарізаний тофу.', 'Тушкувати 10 хв, додати спеції.'], base_img_url + 'lentils%20stew%20with%20tofu%20vegetables?width=400&height=300&nologo=true&seed=66'),
+    new Recipe('r067', 'Кус-кус з тунцем та огірком', ['lunch', 'light', 'high-protein'], {'kus-kus (60g)': 60, 'тунець консервований (100г)': 100, 'огірок (80г)': 80, 'олія (5мл)': 5}, {calories: 410, protein: 30, carbs: 45, fats: 12}, ['Запарити кус-кус.', 'Змішати з тунцем, нарізаним огірком та олією.'], base_img_url + 'couscous%20salad%20with%20tuna?width=400&height=300&nologo=true&seed=67'),
+    new Recipe('r068', 'Салат Цезар (полегшений)', ['lunch', 'high-protein', 'light'], {'куряче філе (100г)': 100, 'салат ромен': 50, 'помідори чері (50г)': 50, 'соус Цезар (20г)': 20}, {calories: 390, protein: 30, carbs: 15, fats: 22}, ['Нарізати овочі, додати нарізану запечену курку.', 'Заправити легким соусом Цезар.'], base_img_url + 'caesar%20salad%20chicken?width=400&height=300&nologo=true&seed=68'),
+    new Recipe('r069', 'Овочевий суп-пюре з броколі', ['lunch', 'light', 'vegetarian'], {'броколі (150г)': 150, 'картопля (50г)': 50, 'цибуля (30г)': 30, 'хліб для грінок (30г)': 30}, {calories: 250, protein: 8, carbs: 35, fats: 8}, ['Зварити овочі до м\'якості.', 'Пюрувати блендером, подати з підсушеними грінками.'], base_img_url + 'green%20broccoli%20cream%20soup?width=400&height=300&nologo=true&seed=69'),
+    new Recipe('r070', 'Плов з куркою та морквою', ['lunch', 'hearty', 'balanced'], {'рис (100г)': 100, 'курка (100г)': 100, 'морква (80г)': 80, 'олія (15мл)': 15}, {calories: 620, protein: 35, carbs: 80, fats: 20}, ['Обсмажити курку та овочі. Додати рис та воду.', 'Готувати під кришкою до готовності рису.'], base_img_url + 'pilaf%20rice%20chicken%20carrot?width=400&height=300&nologo=true&seed=70'),
+    new Recipe('r071', 'Буріто боул з яловичиною', ['lunch', 'high-protein', 'comfort'], {'яловичина відварна (100г)': 100, 'рис (80г)': 80, 'квасоля (50г)': 50, 'кукурудза (30г)': 30}, {calories: 550, protein: 40, carbs: 50, fats: 20}, ['Змішати всі інгредієнти в мисці.', 'Заправити легким соусом або олією та спеціями.'], base_img_url + 'burrito%20bowl%20beef%20beans%20corn?width=400&height=300&nologo=true&seed=71'),
+    new Recipe('r072', 'Паста з томатним соусом та базиліком', ['lunch', 'comfort', 'vegetarian'], {'спагеті (100г)': 100, 'томати протерті (150г)': 150, 'базилік': 5, 'олія (5мл)': 5}, {calories: 480, protein: 15, carbs: 80, fats: 10}, ['Зварити пасту до стану al dente.', 'Змішати з гарячим томатним соусом та свіжим базиліком.'], base_img_url + 'spaghetti%20pasta%20tomato%20sauce%20basil?width=400&height=300&nologo=true&seed=72'),
+    new Recipe('r073', 'Деруни з нежирною сметаною', ['lunch', 'comfort', 'hearty'], {'картопля (200г)': 200, 'яйце (1 шт)': 1, 'борошно (10г)': 10, 'сметана (50г)': 50}, {calories: 510, protein: 10, carbs: 60, fats: 25}, ['Натерти картоплю, змішати з яйцем та борошном.', 'Посмажити деруни. Подати з нежирною сметаною.'], base_img_url + 'potato%20pancakes%20sour%20cream?width=400&height=300&nologo=true&seed=73'),
+    new Recipe('r074', 'Капусняк з грибами', ['lunch', 'vegetarian', 'light'], {'квашена капуста (150г)': 150, 'гриби (80г)': 80, 'картопля (50г)': 50, 'вода (500мл)': 500}, {calories: 300, protein: 10, carbs: 40, fats: 10}, ['Зварити легкий суп з капусти, грибів та картоплі.', 'Подавати гарячим, можна додати зелень.'], base_img_url + 'sauerkraut%20soup%20mushrooms?width=400&height=300&nologo=true&seed=74'),
+    new Recipe('r075', 'Теплий салат з кіноа та креветками', ['lunch', 'high-protein', 'light'], {'кіноа (60г)': 60, 'креветки (100г)': 100, 'авокадо (30г)': 30, 'рукола': 30}, {calories: 430, protein: 35, carbs: 40, fats: 15}, ['Зварити кіноа, обсмажити креветки.', 'Змішати теплу кіноа, креветки, нарізане авокадо та руколу.'], base_img_url + 'quinoa%20salad%20shrimp%20avocado?width=400&height=300&nologo=true&seed=75'),
+    new Recipe('r076', 'Котлети з індички з овочевим пюре', ['lunch', 'high-protein', 'balanced'], {'фарш індички (120г)': 120, 'картопля (100г)': 100, 'броколі (50г)': 50, 'морква (50г)': 50}, {calories: 490, protein: 40, carbs: 45, fats: 18}, ['Приготувати котлети з фаршу на пару або запекти.', 'Зробити пюре з картоплі, броколі та моркви.'], base_img_url + 'turkey%20meatballs%20mashed%20potatoes?width=400&height=300&nologo=true&seed=76'),
+    new Recipe('r077', 'Булгур з куркою та соусом теріякі', ['lunch', 'comfort', 'balanced'], {'булгур (80г)': 80, 'курка (100г)': 100, 'соус теріякі (20г)': 20, 'перець болгарський (50г)': 50}, {calories: 560, protein: 38, carbs: 65, fats: 18}, ['Відварити булгур.', 'Обсмажити курку з перцем і соусом теріякі. Змішати з булгуром.'], base_img_url + 'bulgur%20chicken%20teriyaki?width=400&height=300&nologo=true&seed=77'),
+    new Recipe('r078', 'Суп Мінестроне', ['lunch', 'light', 'vegetarian'], {'квасоля (50г)': 50, 'макарони дрібні (30г)': 30, 'томати (100г)': 100, 'кабачок (50г)': 50, 'бульйон': 400}, {calories: 280, protein: 8, carbs: 45, fats: 8}, ['Зварити овочі та квасолю у бульйоні, додати дрібні макарони.', 'Подавати зі свіжим базиліком.'], base_img_url + 'minestrone%20soup%20vegetables?width=400&height=300&nologo=true&seed=78'),
+    new Recipe('r079', 'Запечена риба (тріска) з травами', ['lunch', 'high-protein', 'light'], {'тріска філе (150г)': 150, 'трави, лимон': 10, 'олія (10мл)': 10}, {calories: 380, protein: 35, carbs: 10, fats: 22}, ['Запекти філе тріски з лимоном та травами 15 хв при 180°C.'], base_img_url + 'baked%20cod%20fish%20lemon%20herbs?width=400&height=300&nologo=true&seed=79'),
+    new Recipe('r080', 'Міні-піца на цільнозерновому тісті', ['lunch', 'comfort', 'balanced'], {'тісто цільнозернове (100г)': 100, 'томатний соус (30г)': 30, 'сир моцарела (50г)': 50, 'печериці (30г)': 30}, {calories: 520, protein: 25, carbs: 60, fats: 20}, ['Сформувати міні-піцу. Додати соус, сир та печериці.', 'Запекти до рум\'янцю.'], base_img_url + 'mini%20pizza%20mushrooms?width=400&height=300&nologo=true&seed=80'),
+    new Recipe('r081', 'Гречка з курячими сердечками', ['dinner', 'hearty', 'high-protein'], {'гречка (80г)': 80, 'курячі сердечка (120г)': 120, 'цибуля (30г)': 30, 'сметана нежирна (20г)': 20}, {calories: 480, protein: 35, carbs: 45, fats: 18}, ['Відварити гречку.', 'Сердечка потушкувати з цибулею та нежирною сметаною.'], base_img_url + 'buckwheat%20porridge%20stewed%20chicken%20hearts?width=400&height=300&nologo=true&seed=81'),
+    new Recipe('r082', 'Запечений батат з сиром фета', ['dinner', 'vegetarian', 'balanced'], {' батат (200г)': 200, 'сир фета (30г)': 30, 'олія (5мл)': 5, 'спеції': 5}, {calories: 410, protein: 12, carbs: 55, fats: 16}, ['Нарізати батат, запекти до м\'якості.', 'Посипати сиром фета та спеціями.'], base_img_url + 'baked%20sweet%20potato%20feta%20cheese?width=400&height=300&nologo=true&seed=82'),
+    new Recipe('r083', 'Хек тушкований з овочами', ['dinner', 'high-protein', 'light'], {'хек філе (150г)': 150, 'морква (50г)': 50, 'помідори (50г)': 50, 'цибуля (30г)': 30}, {calories: 320, protein: 30, carbs: 15, fats: 14}, ['Нарізати овочі та тушкувати їх.', 'Додати філе хека і тушкувати до готовності риби.'], base_img_url + 'stewed%20white%20fish%20vegetables?width=400&height=300&nologo=true&seed=83'),
+    new Recipe('r084', 'Рататуй з яйцем пашот', ['dinner', 'light', 'vegetarian'], {'кабачок (100г)': 100, 'баклажан (100г)': 100, 'томати (100г)': 100, 'яйце (1 шт)': 1}, {calories: 300, protein: 15, carbs: 25, fats: 15}, ['Нарізати та запекти овочі.', 'Подати з яйцем пашот зверху.'], base_img_url + 'ratatouille%20vegetables%20poached%20egg?width=400&height=300&nologo=true&seed=84'),
+    new Recipe('r085', 'Стейк з індички з зеленим салатом', ['dinner', 'high-protein', 'light'], {'стейк індички (150г)': 150, 'салат зелений (100г)': 100, 'олія для салату (10мл)': 10}, {calories: 420, protein: 45, carbs: 10, fats: 22}, ['Обсмажити або запекти стейк індички.', 'Подати з легким зеленим салатом, заправленим олією.'], base_img_url + 'turkey%20steak%20green%20salad?width=400&height=300&nologo=true&seed=85'),
+    new Recipe('r086', 'Запіканка з макаронів та сиру', ['dinner', 'comfort', 'hearty'], {'макарони (100г)': 100, 'сир твердий (50г)': 50, 'молоко (50мл)': 50, 'яйце (1 шт)': 1}, {calories: 580, protein: 30, carbs: 65, fats: 25}, ['Зварити макарони. Змішати з сиром, яйцем та молоком.', 'Запекти в духовці до золотистої скоринки.'], base_img_url + 'macaroni%20cheese%20casserole?width=400&height=300&nologo=true&seed=86'),
+    new Recipe('r087', 'Форель запечена з броколі', ['dinner', 'high-protein', 'balanced'], {'форель філе (120г)': 120, 'броколі (150г)': 150, 'олія (10мл)': 10}, {calories: 490, protein: 38, carbs: 20, fats: 28}, ['Запекти філе форелі та броколі разом при 180°C 15-20 хв.'], base_img_url + 'baked%20trout%20fish%20broccoli?width=400&height=300&nologo=true&seed=87'),
+    new Recipe('r088', 'Овочеве карі з нутом', ['dinner', 'vegetarian', 'comfort'], {'нут консервований (100г)': 100, 'кокосове молоко (100мл)': 100, 'каррі паста (10г)': 10, 'овочі мікс (100г)': 100}, {calories: 450, protein: 15, carbs: 60, fats: 18}, ['Тушкувати нут та овочі у кокосовому молоці з додаванням пасти каррі.'], base_img_url + 'chickpea%20vegetable%20curry?width=400&height=300&nologo=true&seed=88'),
+    new Recipe('r089', 'Бургер з котлетою з червоної сочевиці', ['dinner', 'vegetarian', 'comfort'], {'булочка цільнозернова (70г)': 70, 'котлета сочевична (100г)': 100, 'сир (20г)': 20, 'салат': 10}, {calories: 540, protein: 20, carbs: 60, fats: 25}, ['Приготувати котлету. Скласти бургер з овочами та сиром.'], base_img_url + 'vegetarian%20burger%20lentil%20patty?width=400&height=300&nologo=true&seed=89'),
+    new Recipe('r090', 'Картопляне пюре з курячими тефтелями', ['dinner', 'hearty', 'comfort'], {'картопля (200г)': 200, 'фарш курячий (100г)': 100, 'молоко (50мл)': 50, 'олія (10мл)': 10}, {calories: 600, protein: 35, carbs: 60, fats: 25}, ['Зробити тефтелі на пару або запекти.', 'Зварити картопляне пюре з молоком та олією.'], base_img_url + 'mashed%20potatoes%20meatballs?width=400&height=300&nologo=true&seed=90'),
+    new Recipe('r091', 'Салат з квасолею та курячим філе', ['dinner', 'high-protein', 'balanced'], {'куряче філе (100г)': 100, 'квасоля консервована (100г)': 100, 'перець болгарський (50г)': 50, 'олія': 5}, {calories: 410, protein: 40, carbs: 35, fats: 14}, ['Змішати нарізане філе, квасолю та перець.', 'Заправити олією та спеціями.'], base_img_url + 'chicken%20bean%20salad?width=400&height=300&nologo=true&seed=91'),
+    new Recipe('r092', 'Голубці ліниві', ['dinner', 'comfort', 'balanced'], {'фарш яловичий (100г)': 100, 'капуста (100г)': 100, 'рис (50г)': 50, 'томатний соус': 50}, {calories: 480, protein: 30, carbs: 50, fats: 20}, ['Змішати фарш, нарізану капусту та відварений рис.', 'Сформувати, потушкувати у томатному соусі.'], base_img_url + 'cabbage%20rolls%20stew%20tomato?width=400&height=300&nologo=true&seed=92'),
+    new Recipe('r093', 'Овочі-гриль з хумусом', ['dinner', 'light', 'vegetarian'], {'кабачок (100г)': 100, 'перець (100г)': 100, 'хумус (50г)': 50, 'баклажан (50г)': 50}, {calories: 350, protein: 10, carbs: 40, fats: 18}, ['Нарізати овочі та обсмажити на грилі.', 'Подати з хумусом.'], base_img_url + 'grilled%20vegetables%20hummus?width=400&height=300&nologo=true&seed=93'),
+    new Recipe('r094', 'Яловичина тушкована з чорносливом', ['dinner', 'hearty', 'high-protein'], {'яловичина (120г)': 120, 'чорнослив (30г)': 30, 'рис (70г)': 70}, {calories: 520, protein: 40, carbs: 50, fats: 20}, ['Тушкувати яловичину з чорносливом та спеціями.', 'Подати з відвареним рисом.'], base_img_url + 'beef%20stew%20prunes%20rice?width=400&height=300&nologo=true&seed=94'),
+    new Recipe('r095', 'Крем-суп з гарбуза та імбиру', ['dinner', 'light', 'vegetarian'], {'гарбуз (300г)': 300, 'імбир (10г)': 10, 'бульйон овочевий (300мл)': 300}, {calories: 200, protein: 5, carbs: 30, fats: 5}, ['Зварити гарбуз з імбиром у бульйоні.', 'Пропюрувати блендером.'], base_img_url + 'pumpkin%20ginger%20soup?width=400&height=300&nologo=true&seed=95'),
+    new Recipe('r096', 'Фруктове морозиво (банан/ягоди)', ['dessert', 'sweet', 'light'], {'банан заморожений (100г)': 100, 'ягоди заморожені (50г)': 50, 'йогурт (20г)': 20}, {calories: 180, protein: 3, carbs: 35, fats: 3}, ['Збити всі заморожені інгредієнти у блендері до консистенції морозива.', 'Подавати негайно.'], base_img_url + 'fruit%20ice%20cream%20sorbet%20berries?width=400&height=300&nologo=true&seed=96'),
+    new Recipe('r097', 'Овочеві палички з йогуртовим соусом', ['snack', 'light', 'vegetarian'], {'морква (50г)': 50, 'селера (50г)': 50, 'йогурт грецький (50г)': 50, 'спеції': 2}, {calories: 150, protein: 8, carbs: 15, fats: 6}, ['Нарізати моркву та селеру паличками.', 'Йогурт змішати зі спеціями для соусу.'], base_img_url + 'vegetable%20sticks%20carrot%20celery%20dip?width=400&height=300&nologo=true&seed=97'),
+    new Recipe('r098', 'Протеїновий батончик без випікання', ['snack', 'high-protein', 'sweet'], {'протеїновий порошок (20г)': 20, 'вівсянка (30г)': 30, 'мед (15г)': 15, 'арахісова паста (10г)': 10}, {calories: 260, protein: 15, carbs: 30, fats: 10}, ['Змішати всі інгредієнти.', 'Сформувати батончики та охолодити у морозильній камері.'], base_img_url + 'protein%20bar%20homemade?width=400&height=300&nologo=true&seed=98'),
+    new Recipe('r099', 'Чай масала з мигдальним молоком', ['drink', 'sweet', 'comfort'], {'мигдальне молоко (200мл)': 200, 'чай/спеції масала': 5, 'мед (10г)': 10}, {calories: 120, protein: 3, carbs: 20, fats: 3}, ['Підігріти молоко, додати чай/спеції масала та мед.', 'Настояти кілька хвилин, процідити.'], base_img_url + 'masala%20chai%20tea%20spices?width=400&height=300&nologo=true&seed=99'),
+    new Recipe('r100', 'Горіхово-фруктова суміш', ['snack', 'hearty', 'sweet'], {'волоські горіхи (30г)': 30, 'родзинки (30г)': 30, 'курага (30г)': 30}, {calories: 350, protein: 10, carbs: 35, fats: 20}, ['Змішати горіхи, родзинки та курагу.', 'Зберігати у герметичному контейнері.'], base_img_url + 'nuts%20dried%20fruits%20mix?width=400&height=300&nologo=true&seed=100'),
+];
+
+// --- LOGIC ---
+
+// 1. Оптимізація зображень
+function fixImageUrls() {
+    RECIPES.forEach(r => {
+        if (r.image.includes('pollinations.ai')) {
+            try {
+                const promptPart = r.image.split('photorealistic%20')[1].split('?')[0];
+                r.image = `https://tse2.mm.bing.net/th?q=${promptPart}&w=400&h=300&c=7&rs=1&p=0`;
+            } catch (e) { console.warn('Img fix failed', e); }
+        }
+    });
+}
+fixImageUrls();
+
+// 2. Розрахунок калорій
+function estimateBMR(profile) {
+    let bmr = 0;
+    if (profile.sex === 'male') {
+        bmr = 10 * profile.weight + 6.25 * profile.height - 5 * profile.age + 5;
+    } else {
+        bmr = 10 * profile.weight + 6.25 * profile.height - 5 * profile.age - 161;
+    }
+    return Math.max(1200, bmr);
+}
+
+function dailyCalorieTarget(profile, goal) {
+    const bmr = estimateBMR(profile);
+    const multi = ACTIVITY_MULTIPLIERS[profile.activity] || 1.55;
+    const goalMod = GOAL_MODIFIERS[goal] || 1.0;
+    return Math.round(bmr * multi * goalMod);
+}
+
+// 3. Підбір рецептів
+function scoreRecipe(recipe, mood, goal) {
+    let score = 0;
+    const g = goal.toLowerCase();
+    const tags = recipe.tags.map(t => t.toLowerCase());
+    const moodTags = MOOD_STYLES[mood] || [];
+    moodTags.forEach(mt => { if (tags.includes(mt)) score += 5; });
+    tags.forEach(t => { if (g.includes(t)) score += 4; });
+    if (tags.includes('light') && (g.includes('lose') || g.includes('cutting'))) score += 3;
+    if (tags.includes('hearty') && (g.includes('gain') || g.includes('muscle'))) score += 3;
+    if (tags.includes('high-protein') && g.includes('muscle')) score += 3;
+    
+    const nut = recipe.nutrition;
+    let nutScore = 0;
+    if (['lose-weight', 'cutting'].includes(goal)) {
+        nutScore = Math.max(0, 50 - (nut.calories / 15));
+    } else if (['gain-weight', 'fast-muscle-gain', 'build-muscle'].includes(goal)) {
+        nutScore = (nut.protein * 2.5) + (nut.calories / 40);
+    } else {
+        const dist = Math.abs(nut.calories - 500);
+        nutScore = 30 - (dist / 15);
+    }
+    score += nutScore;
+    score += (recipe.rating || 0) * 2.0;
+    score += Math.random() * 15;
+    return score;
+}
+
+function containsForbidden(recipe, forbiddenList) {
+    if (!forbiddenList || forbiddenList.length === 0) return false;
+    const text = (Object.keys(recipe.ingredients).join(' ') + ' ' + recipe.name_uk).toLowerCase();
+    for (let f of forbiddenList) {
+        if (text.includes(f)) return true;
+    }
+    return false;
+}
+
+function generatePlan() {
+    const form = document.getElementById('planForm');
+    const formData = new FormData(form);
+    const profile = {
+        age: parseInt(formData.get('age')),
+        sex: formData.get('sex'),
+        weight: parseFloat(formData.get('weight_kg')),
+        height: parseFloat(formData.get('height_cm')),
+        activity: formData.get('activity')
+    };
+    const mood = formData.get('mood');
+    const goal = formData.get('goal');
+    const notes = formData.get('notes');
+    
+    let forbidden = [];
+    if (notes) {
+        forbidden = notes.split(/[,;]/).map(s => s.trim().toLowerCase()).filter(s => s);
+    }
+
+    const targetCalories = dailyCalorieTarget(profile, goal);
+    const categories = ['breakfast', 'lunch', 'snack', 'dinner'];
+    const allocation = { 'breakfast': 0.25, 'lunch': 0.35, 'snack': 0.1, 'dinner': 0.3 };
+    
+    const chosenMeals = {};
+    const usedIds = new Set();
+    let totalNut = { calories: 0, protein: 0, carbs: 0, fats: 0 };
+
+    categories.forEach(cat => {
+        const catTarget = targetCalories * allocation[cat];
+        let candidates = RECIPES.filter(r => r.tags.includes(cat));
+        if (candidates.length === 0) candidates = [...RECIPES];
+
+        candidates = candidates.filter(r => !containsForbidden(r, forbidden));
+        if (candidates.length === 0) candidates = RECIPES.filter(r => !containsForbidden(r, forbidden));
+
+        let scored = candidates.map(r => {
+            if (usedIds.has(r.id)) return null;
+            let base = scoreRecipe(r, mood, goal);
+            let penalty = Math.abs(r.nutrition.calories - catTarget) / 20;
+            return { r: r, score: base - penalty };
+        }).filter(item => item !== null);
+
+        scored.sort((a, b) => b.score - a.score);
+
+        if (scored.length > 0) {
+            const poolSize = Math.min(15, Math.max(5, Math.floor(scored.length / 2)));
+            const topN = scored.slice(0, poolSize);
+            const selected = topN[Math.floor(Math.random() * topN.length)].r;
+            chosenMeals[cat] = selected;
+            usedIds.add(selected.id);
+            totalNut.calories += selected.nutrition.calories;
+            totalNut.protein += selected.nutrition.protein;
+            totalNut.carbs += selected.nutrition.carbs;
+            totalNut.fats += selected.nutrition.fats;
+        }
+    });
+
+    window.LAST_PLAN = {
+        date: new Date().toLocaleDateString(),
+        profile: profile,
+        goal: goal,
+        mood: mood,
+        calorie_target: targetCalories,
+        meals: chosenMeals,
+        total_nutrition: totalNut
+    };
+
+    renderPlan();
+    document.getElementById('planResult').classList.remove('hidden');
+    document.getElementById('planResult').scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderPlan() {
+    const plan = window.LAST_PLAN;
+    if (!plan) return;
+
+    document.getElementById('planDate').textContent = plan.date;
+    document.getElementById('planTargetDisplay').textContent = `${plan.calorie_target} ккал (Загалом: ${Math.round(plan.total_nutrition.calories)})`;
+    document.getElementById('planProfileDisplay').textContent = `${plan.profile.weight}кг • ${plan.profile.height}см`;
+
+    const container = document.getElementById('mealsContainer');
+    container.innerHTML = '';
+
+    for (const [cat, meal] of Object.entries(plan.meals)) {
+        const div = document.createElement('div');
+        div.className = 'panel meal-panel';
+        
+        let ingList = Object.entries(meal.ingredients).map(([k, v]) => `${k} — ${v}`).join(', ');
+        let stepsList = meal.steps_uk.map(s => `<li>${s}</li>`).join('');
+
+        div.innerHTML = `
+            <img src="${meal.image}" class="meal-img" loading="lazy" onclick="showFullRecipe('${meal.id}')" style="cursor:pointer">
+            <div style="flex:1">
+                <div class="compact-key">${cat.toUpperCase()} — ${meal.name_uk}</div>
+                <div style="margin-top:6px" class="small">Інгредієнти: ${ingList}</div>
+                <div style="margin-top:6px" class="small">
+                    Кроки: <ol style="margin:6px 0 0 18px; padding:0">${stepsList}</ol>
+                </div>
+            </div>
+            <div style="min-width:110px;text-align:right">
+                <div style="font-weight:700">${meal.nutrition.calories} ккал</div>
+                <div class="small">Б ${meal.nutrition.protein} • В ${meal.nutrition.carbs} • Ж ${meal.nutrition.fats}</div>
+                <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+                    <button onclick="showFullRecipe('${meal.id}')" style="background:transparent;border:none;cursor:pointer; text-align:right; color:var(--accent-2)">Детальніше</button>
+                    <button onclick="saveRecipeToMyRecipes('${meal.id}')" style="background:transparent;border:none;cursor:pointer; text-align:right">Зберегти</button>
+                </div>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    const highlights = Object.values(plan.meals).map(m => m.name_uk).join(', ');
+    const txt = `Я підібрав це меню, бо ти зараз відчуваєш '${plan.mood}', а мета — '${plan.goal}'.\nОбрані страви: ${highlights}.\n\nСумарно: ${Math.round(plan.total_nutrition.calories)} ккал, білки ${plan.total_nutrition.protein.toFixed(1)} г, вуглеводи ${plan.total_nutrition.carbs.toFixed(1)} г, жири ${plan.total_nutrition.fats.toFixed(1)} г.`;
+    document.getElementById('planExplanation').textContent = txt;
+
+    const shopListEl = document.getElementById('shoppingList');
+    shopListEl.innerHTML = '';
+    const items = {};
+    for (let meal of Object.values(plan.meals)) {
+        for (let [ing, qty] of Object.entries(meal.ingredients)) {
+            items[ing] = (items[ing] || 0) + parseFloat(qty);
+        }
+    }
+    for (let [k, v] of Object.entries(items)) {
+        const li = document.createElement('li');
+        li.textContent = `${k} — ${v}`;
+        shopListEl.appendChild(li);
+    }
+}
+
+// --- UI HELPERS ---
+function toggleDark() {
+    document.body.classList.toggle('dark');
+    localStorage.setItem('ai_theme_dark', document.body.classList.contains('dark'));
+}
+if (localStorage.getItem('ai_theme_dark') === 'true') document.body.classList.add('dark');
+
+function copyShopping() {
+    const text = Array.from(document.querySelectorAll('#shoppingList li')).map(li => li.textContent).join('\n');
+    navigator.clipboard.writeText(text).then(() => alert('Скопійовано!')).catch(e => alert('Помилка'));
+}
+
+// ОНОВЛЕНА ФУНКЦІЯ: Відкриття повної інформації (шукає всюди)
+function showFullRecipe(id) {
+    let meal = RECIPES.find(r => r.id === id);
+    
+    // Якщо не знайдено в основній базі, шукаємо в збережених
+    if (!meal) {
+        const saved = JSON.parse(localStorage.getItem('ai_my_recipes') || '[]');
+        meal = saved.find(r => r.id === id);
+    }
+
+    if (!meal) return;
+    
+    document.getElementById('fullRecipeTitle').textContent = meal.name_uk;
+    const img = document.getElementById('fullRecipeImage');
+    img.src = meal.image;
+    img.classList.remove('hidden');
+    
+    // Формування красивого списку інгредієнтів і кроків
+    let html = '<h4 style="margin-bottom:8px">Інгредієнти:</h4><ul style="margin-top:0">';
+    if (typeof meal.ingredients === 'object' && !Array.isArray(meal.ingredients)) {
+         html += Object.entries(meal.ingredients).map(([k,v]) => `<li><b>${k}</b>: ${v}г</li>`).join('');
+    } else if (Array.isArray(meal.ingredients)) {
+         html += meal.ingredients.map(k => `<li>${k}</li>`).join('');
+    }
+    html += '</ul>';
+
+    html += '<h4 style="margin-bottom:8px">Приготування:</h4><ol style="margin-top:0">';
+    if (meal.steps_uk && meal.steps_uk.length > 0) {
+        html += meal.steps_uk.map(s => `<li style="margin-bottom:6px">${s}</li>`).join('');
+    } else {
+        html += '<li>Інструкції не знайдено.</li>';
+    }
+    html += '</ol>';
+
+    if(meal.nutrition) {
+        html += `<div style="background:var(--bg);padding:10px;border-radius:8px;margin-top:10px">
+            <b>КБЖУ:</b> ${meal.nutrition.calories} ккал | Б: ${meal.nutrition.protein} | В: ${meal.nutrition.carbs} | Ж: ${meal.nutrition.fats}
+        </div>`;
+    }
+    
+    document.getElementById('fullRecipeBody').innerHTML = html;
+    document.getElementById('fullRecipeModal').classList.remove('hidden');
+    document.getElementById('modalOverlay').classList.remove('hidden');
+}
+
+function closeFullRecipe() {
+    document.getElementById('fullRecipeModal').classList.add('hidden');
+    document.getElementById('modalOverlay').classList.add('hidden');
+}
+
+// ОНОВЛЕНА ФУНКЦІЯ: Збереження повного об'єкту рецепту
+function saveRecipeToMyRecipes(id) {
+    const meal = RECIPES.find(r => r.id === id);
+    if(!meal) return;
+    const raw = localStorage.getItem('ai_my_recipes') || '[]';
+    const arr = JSON.parse(raw);
+    if(arr.find(r => r.id === id)) { alert('Вже збережено'); return; }
+    
+    // Зберігаємо ПОВНИЙ об'єкт, щоб мати доступ до кроків і інгредієнтів завжди
+    const toSave = { ...meal, saved_at: new Date().toISOString() };
+    
+    arr.push(toSave);
+    localStorage.setItem('ai_my_recipes', JSON.stringify(arr));
+    alert('Рецепт успішно збережено!');
+}
+
+function saveCurrentPlan() {
+    if (!window.LAST_PLAN) return;
+    const raw = localStorage.getItem('ai_saved_plans') || '[]';
+    const arr = JSON.parse(raw);
+    arr.unshift({
+        id: 'plan_' + Date.now(),
+        name: 'План ' + new Date().toLocaleDateString(),
+        saved_at: new Date().toISOString(),
+        payload: window.LAST_PLAN
+    });
+    localStorage.setItem('ai_saved_plans', JSON.stringify(arr));
+    alert('План збережено');
+}
+
+function showPage(page) {
+    document.getElementById('page-home').classList.add('hidden');
+    document.getElementById('page-myrecipes').classList.add('hidden');
+    document.getElementById(`page-${page}`).classList.remove('hidden');
+    
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`nav-${page}`).classList.add('active');
+
+    if (page === 'myrecipes') renderMyRecipes();
+}
+
+function renderMyRecipes() {
+    const container = document.getElementById('myRecipesList');
+    container.innerHTML = '';
+    
+    const plans = JSON.parse(localStorage.getItem('ai_saved_plans') || '[]');
+    const recipes = JSON.parse(localStorage.getItem('ai_my_recipes') || '[]');
+
+    if (plans.length === 0 && recipes.length === 0) {
+        container.innerHTML = '<div class="muted small" style="padding:10px;">Поки що нічого не збережено. Спробуйте згенерувати та зберегти план або рецепт.</div>';
+        return;
+    }
+
+    if (plans.length) {
+        container.innerHTML += '<h4>Збережені плани</h4>';
+        plans.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'panel';
+            div.style.marginBottom = '8px';
+            div.style.display = 'flex';
+            div.style.justifyContent = 'space-between';
+            div.style.alignItems = 'center';
+            div.innerHTML = `
+                <div>
+                    <strong>${p.name}</strong> 
+                    <div class="muted small">${new Date(p.saved_at).toLocaleString()}</div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="loadSavedPlan('${p.id}')" style="background:#06b6d4; color:#fff; border:none; padding: 4px 10px; border-radius: 6px; cursor:pointer; font-weight: 600;">
+                        Відкрити
+                    </button>
+                    <button onclick="deletePlan('${p.id}')" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 6px; cursor:pointer; font-weight: 600;">
+                        Видалити
+                    </button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    if (recipes.length) {
+        container.innerHTML += '<h4 style="margin-top:20px;">Збережені рецепти</h4>';
+        recipes.forEach(r => {
+            const div = document.createElement('div');
+            div.className = 'panel';
+            div.style.marginBottom = '8px';
+            div.style.display = 'flex';
+            div.style.justifyContent = 'space-between';
+            div.style.alignItems = 'center';
+            div.style.gap = '10px';
+            
+            div.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px; cursor:pointer; flex-grow:1" onclick="showFullRecipe('${r.id}')">
+                    <img src="${r.image}" style="width:50px;height:50px;border-radius:6px; object-fit: cover;">
+                    <div style="flex:1">
+                         <div style="font-weight:700; font-size:14px">${r.name_uk || r.name}</div>
+                         <div class="muted small" style="font-size:11px">Натисніть для перегляду</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="showFullRecipe('${r.id}')" style="background:#06b6d4; color:#fff; border:none; padding: 6px 12px; border-radius: 6px; cursor:pointer; font-weight: 600; font-size:13px">
+                        Відкрити
+                    </button>
+                    <button onclick="deleteRecipe('${r.id}')" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor:pointer; font-weight: 600; font-size:13px">
+                        ✕
+                    </button>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+}
+
+function loadSavedPlan(id) {
+    const plans = JSON.parse(localStorage.getItem('ai_saved_plans') || '[]');
+    const p = plans.find(x => x.id === id);
+    if(p) {
+        window.LAST_PLAN = p.payload;
+        showPage('home');
+        renderPlan();
+        document.getElementById('planResult').classList.remove('hidden');
+        document.getElementById('planResult').scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+function deleteRecipe(id) {
+    if (confirm('Ви впевнені, що хочете видалити цей рецепт?')) {
+        let recipes = JSON.parse(localStorage.getItem('ai_my_recipes') || '[]');
+        recipes = recipes.filter(r => r.id !== id);
+        localStorage.setItem('ai_my_recipes', JSON.stringify(recipes));
+        renderMyRecipes();
+    }
+}
+
+function deletePlan(id) {
+    if (confirm('Ви впевнені, що хочете видалити цей план?')) {
+        let plans = JSON.parse(localStorage.getItem('ai_saved_plans') || '[]');
+        plans = plans.filter(p => p.id !== id);
+        localStorage.setItem('ai_saved_plans', JSON.stringify(plans));
+        renderMyRecipes();
+    }
+}
+
+const savedForm = JSON.parse(localStorage.getItem('ai_form_data') || '{}');
+const form = document.getElementById('planForm');
+for(let [k,v] of Object.entries(savedForm)) {
+    if(form.elements[k]) form.elements[k].value = v;
+}
+form.addEventListener('change', () => {
+    const fd = new FormData(form);
+    const obj = {};
+    fd.forEach((v,k) => obj[k] = v);
+    localStorage.setItem('ai_form_data', JSON.stringify(obj));
+});
+</script>
+</body>
+</html>
